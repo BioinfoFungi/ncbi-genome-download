@@ -1,6 +1,11 @@
 package com.wangyan.ncbi.entrez;
 
+import com.wangyan.ncbi.pojo.Author;
+import com.wangyan.ncbi.pojo.Journal;
+import com.wangyan.ncbi.pojo.Reference;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class EFetch {
@@ -11,5 +16,10 @@ public class EFetch {
     private String articleTitle;
     private String articleAbstract;
 
+    private Journal journal;
+    private List<Author> authors;
+    private List<Integer> referencePids;
+
+    private String publishDate;
 
 }
