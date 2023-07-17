@@ -9,4 +9,6 @@ import java.util.List;
 
 public interface IPubMedService  extends ICrudService<PubMed,PubMed, BaseVo,Integer> {
     List<PubMed> listAllNoEFetch();
+
+    PubMed findByPMID(Integer pId);
 }

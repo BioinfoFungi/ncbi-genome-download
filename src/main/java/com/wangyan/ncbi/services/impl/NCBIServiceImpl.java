@@ -224,6 +224,10 @@ public class NCBIServiceImpl implements INCBIService {
                     if (article.element("Journal").element("JournalIssue")!=null){
                         Element pubDate = article.element("Journal").element("JournalIssue").element("PubDate");
                         String year = pubDate.elementText("Year");
+                        if(year==null){
+                            // TUDO
+                            year = "2018";
+                        }
                         String month = pubDate.elementText("Month");
                         if(month!=null){
                             month =String.valueOf( MonthConverter.convert(month));

@@ -82,6 +82,10 @@ public class SpringBootConsoleApplication  implements CommandLineRunner {
     @Autowired
     IPubMedAuthorService pubMedAuthorService;
 
+
+    @Autowired
+    INLPService nlpService;
+
     public static void main(String[] args) {
         SpringApplication application = new SpringApplication(SpringBootConsoleApplication.class);
         application.setWebApplicationType(WebApplicationType.NONE);
@@ -98,7 +102,7 @@ public class SpringBootConsoleApplication  implements CommandLineRunner {
         Map<Integer, PubMed> pubMedMap = ServiceUtil.convertToMap(pubMedList, PubMed::getPId);
         Set<Integer> pids = ServiceUtil.fetchProperty(pubMedList, PubMed::getPId);
         Iterator<Integer> iterator = pids.iterator();
-        int batchSize = 50;
+        int batchSize = 1000;
         // 遍历Set并分批处理
         while (iterator.hasNext()) {
             // 创建一个新的批次
@@ -150,10 +154,8 @@ public class SpringBootConsoleApplication  implements CommandLineRunner {
         }
     }
 
-    @Override
-    public void run(String... args) throws ParseException {
 
-
+    public  void runEFetch(){
         int maxRetries = 5;
         int retryCount = 0;
         boolean success = false;
@@ -175,6 +177,15 @@ public class SpringBootConsoleApplication  implements CommandLineRunner {
         } else {
             System.out.println("操作失败");
         }
+    }
+
+    @Override
+    public void run(String... args) throws ParseException {
+//        runEFetch();
+
+        nlpService.ParagraphVectors();
+//        nlpService.deepLearning1();
+
     }
 
 
