@@ -6,3 +6,11 @@ names.dmp.head
 nodes.dmp.head
 merge_zong.xlsx
 疾病列表3W.xlsx
+GoogleNews-vectors-negative300.bin.gz
+pathToSaveModel.txt
+model.bin
+a.txt
+.~merge_zong.xlsx
+raw_sentences.txt
+\.~merge_zong.xlsx
+pathToWriteto.txt

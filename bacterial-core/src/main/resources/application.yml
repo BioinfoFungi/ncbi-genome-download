@@ -1,0 +1,158 @@
+
+
+
+
+cms:
+  workDir: ${user.home}/cms
+  templates: templates/templates
+  uploadPrefix: http://47.93.201.74:8080
+  isDebug: true
+  authorizeInit: true
+  url: http://localhost:8080
+  proxy_url: "http://w66h994817.zicp.fun/"
+  site-map: "http://www.bioinfo.online"
+spring:
+  main:
+    web-application-type: none
+  mvc:
+    throw-exception-if-no-handler-found: true
+  resources:
+    add-mappings: false
+  #    static-path-pattern: /**
+  #  resources:
+  #    static-locations: file:${cms.workDir}/html/, file:${cms.workDir}/, classpath:/static/
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false # 在controller层就打开EntityManager
+    properties:
+      hibernate:
+        #        format_sql: true
+        #        generate_statistics: true # 将hibernate的统计打开来看看到底是不是被缓存了
+        enable_lazy_load_no_trans: true # 在没有事务的情况下允许懒加载
+#        cache:
+#          use_second_level_cache: true
+#          use_query_cache: true
+#          region:
+#            factory_class: jcache
+  mail: #邮箱配置
+    host: smtp.qq.com              #使用163邮箱服务器
+    username: xxxx@qq.com   #你的163邮箱
+    password: xxxx      #SMTP授权密码 (不是密码)
+    port: 587
+    protocol: smtp
+    default-encoding: UTF-8
+    jndi-name: email
+
+  #  cache:
+  #    jcache:
+  #      config: classpath:ehcache.xml
+
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+  ############################## h2 start ##################################
+  # 使用H2数据库
+#  datasource:
+#    platform: h2
+#    driverClassName: org.h2.Driver
+#    url: jdbc:h2:file:${user.home}/cms/h2/db3;DB_CLOSE_DELAY=-1;MODE=MySQL;NON_KEYWORDS=USER
+#    username: root
+#    password: 1234567
+#    #    schema: classpath:db/user.sql #启动时需要初始化的建表语句
+#    #    data: classpath:init_data.sql #初始化的数据
+#    initialization-mode: always
+#  h2:
+#    console:
+#      settings:
+#        web-allow-others: true # 配置h2的远程访问
+#      enabled: true # 配置程序开启时就会启动h2 web consloe
+#      path: /h2-console #，进行该配置，你就可以通过YOUR_URL/h2-console访问h2 web consloe。YOUR_URL是你程序的访问URl
+############################## h2 end ##################################
+
+############################## mysql end ##################################
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ncbi?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+
+############################## mysql end ##################################
+
+server:
+  servlet-path: /api
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript
+    min-response-size: 50
+  tomcat:
+    max-threads: 200
+    max-connections: 300
+  port: 8085
+  ssl:
+    key-store: classpath:server.keystore #配置证书路径
+    key-store-password: 123456 #
+    key-store-type: JKS # PKCS12 JKS
+http:
+  port: 8087
+#org:
+#  quartz:
+#    scheduler:
+#      instanceName: MyScheduler
+#    threadPool:
+#      threadCount: 3
+#    jobStore:
+#      class: org.quartz.simpl.RAMJobStore
+
+
+jwt:
+  header: Authorization
+  base64-secret: ZmQ0ZGI5NjQ0MDQwY2I4MjMxY2Y3ZmI3MjdhN2ZmMjNhODViOTg1ZGE0NTBjMGM4NDA5NzYxMjdjOWMwYWRmZTBlZjlhNGY3ZTg4Y2U3YTE1ODVkZDU5Y2Y3OGYwZWE1NzUzNWQ2YjFjZDc0NGMxZWU2MmQ3MjY1NzJmNTE0MzI=
+  token-validity-in-seconds: 3600
+  token-validity-in-seconds-for-remember-me: 3600
+  token-refresh-validity-in-seconds: 7800
+  token-refresh-validity-in-seconds-for-remember-me: 7800
+
+
+#swagger:
+#  enable: true
+#  applicationName: Swagger-Test
+#  applicationVersion: dev
+#  applicationDescription: dev
+#  groupName: Swagger-Test
+
+
+wx:
+  mp:
+    appId: xxx
+    secret: xxx
+    token: xxx
+    aesKey: xxx
+  miniapp:
+    configs:
+      - appid: xxx
+        secret: xxx
+        token: #微信小程序消息服务器配置的token
+        aesKey: #微信小程序消息服务器配置的EncodingAESKey
+        msgDataFormat: JSON
+
+pusher:
+  baidu:
+    site: https://www.bioinfo.online
+    token: RGbsR3A09kEW9cWU
+
+#logging:
+#  level:
+#    org:
+#      springframework:
+#        web:
+#          servlet: TRACE
+#    com:
+#      wangyang:
+#        web: DEBUG
