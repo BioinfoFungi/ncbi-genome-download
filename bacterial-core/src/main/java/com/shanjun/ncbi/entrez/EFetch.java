@@ -20,5 +20,5 @@ public class EFetch {
     private List<Integer> referencePids;
 
     private String publishDate;
-
+    private String articleFullText;
 }

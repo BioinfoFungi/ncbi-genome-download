@@ -3,6 +3,7 @@ package com.shanjun.ncbi.pojo;
 import com.wangyang.common.pojo.BaseEntity;
 import lombok.Data;
 
+import javax.persistence.Column;
 import javax.persistence.Entity;
 
 @Entity
@@ -10,6 +11,11 @@ import javax.persistence.Entity;
 public class Disease extends BaseEntity {
     private String name;
     private String enName;
+
+    private String abbreviation;
+
+    @Column(columnDefinition = "longtext")
+    private String description;
 
     public Disease(String name, String enName) {
         this.name = name;

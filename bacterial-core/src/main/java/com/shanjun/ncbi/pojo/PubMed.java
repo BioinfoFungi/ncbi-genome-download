@@ -1,5 +1,6 @@
 package com.shanjun.ncbi.pojo;
 
+import com.wangyang.common.annotation.QueryField;
 import com.wangyang.common.pojo.BaseEntity;
 import lombok.Data;
 
@@ -19,8 +20,14 @@ public class PubMed  extends BaseEntity {
     private String articleTitle;
     @Column(columnDefinition = "longtext")
     private String articleAbstract;
-    private Boolean isEFetch=false;
+    @Column(columnDefinition = "longtext")
+    private String articleFullText;
+    @QueryField
+    private Boolean isEFetch;
+    @QueryField
+    private Boolean isPMCEFetch;
     private Integer journalId;
     private Date publishDate;
+
 
 }

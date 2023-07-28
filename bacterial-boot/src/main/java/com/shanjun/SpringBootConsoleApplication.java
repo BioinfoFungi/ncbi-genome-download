@@ -16,6 +16,11 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -23,8 +28,13 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 @SpringBootApplication
-@Slf4j
-public class SpringBootConsoleApplication implements CommandLineRunner {
+
+@ComponentScan(basePackages = {"com.wangyang","com.shanjun","com.report"})
+@EntityScan(basePackages = {"com.wangyang","com.shanjun","com.report"})
+@EnableJpaRepositories(basePackages = {"com.wangyang","com.shanjun","com.report"})
+@EnableCaching
+@EnableAsync
+public class SpringBootConsoleApplication {
 //    private static Logger LOG = LoggerFactory
 //            .getLogger(SpringBootConsoleApplication.class);
 
@@ -35,28 +45,22 @@ public class SpringBootConsoleApplication implements CommandLineRunner {
     @Autowired
     IPubMedService pubMedService;
 
-    @Autowired
-    IJournalService journalService;
+
     @Autowired
     INCBIService ncbiService;
 
-    @Autowired
-    IReferenceService referenceService;
 
-    @Autowired
-    IAuthorService authorService;
 
-    @Autowired
-    IPubMedAuthorService pubMedAuthorService;
 
 
     @Autowired
     INLPService nlpService;
 
     public static void main(String[] args) {
-        SpringApplication application = new SpringApplication(SpringBootConsoleApplication.class);
-        application.setWebApplicationType(WebApplicationType.NONE);
-        application.run(args);
+        SpringApplication.run(SpringBootConsoleApplication.class, args);
+//        SpringApplication application = new SpringApplication(SpringBootConsoleApplication.class);
+//        application.setWebApplicationType(WebApplicationType.NONE);
+//        application.run(args);
 //载请附上原文出处链接及本声明。
 //        原文链接：https://blog.csdn.net/kerongao/article/details/109576388
 //        log.info("STARTING THE APPLICATION");
@@ -64,89 +68,34 @@ public class SpringBootConsoleApplication implements CommandLineRunner {
 //        log.info("APPLICATION FINISHED");
     }
 
-    public void runPubmed() throws DocumentException, IOException, ParseException {
-        List<PubMed> pubMedList = pubMedService.listAllNoEFetch();
-        Map<Integer, PubMed> pubMedMap = ServiceUtil.convertToMap(pubMedList, PubMed::getPId);
-        Set<Integer> pids = ServiceUtil.fetchProperty(pubMedList, PubMed::getPId);
-        Iterator<Integer> iterator = pids.iterator();
-        int batchSize = 1000;
-        // 遍历Set并分批处理
-        while (iterator.hasNext()) {
-            // 创建一个新的批次
-            Set<Integer> batch = new HashSet<>();
-
-            // 在当前批次中添加元素
-            for (int i = 0; i < batchSize && iterator.hasNext(); i++) {
-                batch.add(iterator.next());
-            }
-            List<EFetch> fetches = ncbiService.spiderEFetch(batch, 10000);
-            for (EFetch eFetch : fetches) {
-                PubMed pubMed = pubMedMap.get(eFetch.getPId());
-                if(pubMed!=null){
-                    pubMed.setIsEFetch(true);
-                    BeanUtils.copyProperties(eFetch, pubMed, "pId","publishDate");
-                    String publishDate = eFetch.getPublishDate();
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                    Date date = sdf.parse(publishDate);
-                    pubMed.setPublishDate(date);
-                    Journal journalInput = eFetch.getJournal();
-                    Journal journal = journalService.findSave(journalInput);
-                    pubMed.setJournalId( journal.getId());
-
-                    List<Integer> referencePids = eFetch.getReferencePids();
-                    if(referencePids!=null){
-                        for (Integer id:referencePids ){
-                            PubMed pubMedRef = pubMedMap.get(id);
-                            if(pubMedRef!=null){
-                                referenceService.findSave(pubMed.getId(), pubMedRef.getId());
-                            }
-                        }
-
-                    }
-
-                    List<Author> authors = eFetch.getAuthors();
-                    if(authors!=null){
-                        for (Author authorInput: authors){
-                            Author author = authorService.findSave(authorInput);
-                            pubMedAuthorService.findSave(pubMed.getId(),author.getId());
-                        }
-
-                    }
-
-                    pubMedService.save(pubMed);
-                }
-
-            }
-            System.out.println(pubMedService.listAllNoEFetch().size());
-        }
-    }
 
 
-    public  void runEFetch(){
-        int maxRetries = 5;
-        int retryCount = 0;
-        boolean success = false;
+//
+//    public  void runEFetch(){
+//        int maxRetries = 5;
+//        int retryCount = 0;
+//        boolean success = false;
+//
+//        while (retryCount < maxRetries && !success) {
+//            try {
+//                // 执行可能抛出异常的操作
+////                runPubmed();
+//                success = true; // 如果没有抛出异常，则表示操作成功
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//                System.out.println("操作失败，重试次数: " + (retryCount + 1));
+//                retryCount++;
+//            }
+//        }
+//
+//        if (success) {
+//            System.out.println("操作成功");
+//        } else {
+//            System.out.println("操作失败");
+//        }
+//    }
 
-        while (retryCount < maxRetries && !success) {
-            try {
-                // 执行可能抛出异常的操作
-                runPubmed();
-                success = true; // 如果没有抛出异常，则表示操作成功
-            } catch (Exception e) {
-                e.printStackTrace();
-                System.out.println("操作失败，重试次数: " + (retryCount + 1));
-                retryCount++;
-            }
-        }
-
-        if (success) {
-            System.out.println("操作成功");
-        } else {
-            System.out.println("操作失败");
-        }
-    }
-
-    @Override
+//    @Override
     public void run(String... args) throws ParseException {
         ncbiService.initTaxonomyDB();
 //        runEFetch();

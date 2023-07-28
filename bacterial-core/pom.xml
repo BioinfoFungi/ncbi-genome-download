@@ -31,6 +31,11 @@
     <dependencies>
         <dependency>
             <groupId>com.wangyang</groupId>
+            <artifactId>cms-core</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.wangyang</groupId>
             <artifactId>cms-common</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>

@@ -34,6 +34,18 @@ public class PubMedServiceImpl extends AbstractCrudService<PubMed,PubMed, BaseVo
             }
         });
     }
+    @Override
+    public List<PubMed> listAllNoPMCEFetch(){
+        return pubMedRepository.findAll(new Specification<PubMed>() {
+            @Override
+            public Predicate toPredicate(Root<PubMed> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
+                return query.where(criteriaBuilder.or(criteriaBuilder.isNull(root.get("isPMCEFetch")),
+                        criteriaBuilder.isFalse(root.get("isPMCEFetch"))),
+                        criteriaBuilder.isNotNull(root.get("pmc"))).getRestriction();
+            }
+        });
+    }
+
 
     @Override
     public PubMed findByPMID(Integer pId){

@@ -25,13 +25,16 @@ import org.dom4j.Document;
 import org.dom4j.DocumentException;
 import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -40,20 +43,35 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class NCBIServiceImpl implements INCBIService {
+
     @Autowired
     IPubMedService pubMedService;
+
+
     @Autowired
-    ITaxonomyServices taxonomyServices;
+    ITaxonomyService taxonomyNamesService;
 
     @Autowired
-    ITaxonomyNamesService taxonomyNamesService;
-
-
+    IReferenceService referenceService;
     @Autowired
     ITaxonomyNodesServices taxonomyNodesServices;
 
     @Autowired
     IDiseaseService diseaseService;
+
+    @Autowired
+    IJournalService journalService;
+
+
+    @Autowired
+    IAuthorService authorService;
+
+    @Autowired
+    IPubMedAuthorService pubMedAuthorService;
+
+
+    public static Boolean isAlreadyRun=false;
+    public static Boolean isPMCAlreadyRun=false;
 
     public List<String> rangeDate(int startYear, int endYear){
         LocalDate startDate = LocalDate.of(startYear, 1, 1);
@@ -75,7 +93,7 @@ public class NCBIServiceImpl implements INCBIService {
 
     @Override
     public void initTaxonomyDB(){
-        List<TaxonomyNames> taxonomyNames = tsvToTaxonomyNames( "/home/wangyang/workspace/ncbi-genome-download/names.dmp");
+        List<Taxonomy> taxonomyNames = tsvToTaxonomyNames( "/home/wangyang/workspace/ncbi-genome-download/names.dmp");
         taxonomyNamesService.truncateTable();
         taxonomyNamesService.saveAll(taxonomyNames);
 
@@ -164,193 +182,284 @@ public class NCBIServiceImpl implements INCBIService {
     }
 
     @Override
-    public List<EFetch>    spiderEFetch(Set<Integer> ids, Integer retMax) throws DocumentException, IOException {
-        List<String> stringList = new ArrayList<>();
-        for (Integer num : ids) {
-            stringList.add(num.toString());
-        }
-
-        String joinIds = String.join(",", stringList);
-        String apiKey = "8145c95381a416f75f7f3245637414470807";
-        log.info(joinIds);
-
-        String apiUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&&api_key=" + apiKey+"&retmax="+retMax;
-        log.info(apiUrl);
-        HttpClient httpClient = HttpClients.createDefault();
-        // 创建HttpGet请求对象
-        HttpPost httpPost = new HttpPost(apiUrl);
-        List<NameValuePair> params = new ArrayList<>();
-        params.add(new BasicNameValuePair("id", joinIds));
-        UrlEncodedFormEntity urlEncodedFormEntity = new UrlEncodedFormEntity(params, StandardCharsets.UTF_8);
-        httpPost.setEntity(urlEncodedFormEntity);
-
-        // 发送请求并获取响应
-        HttpResponse response = httpClient.execute(httpPost);
-
-        // 解析响应内容
-        HttpEntity entity = response.getEntity();
-        String responseText = EntityUtils.toString(entity);
-        // 处理响应数据
-//            System.out.println(responseText);
-        Document document = DocumentHelper.parseText(responseText);
-        Element rootElement = document.getRootElement();
-
-        List<EFetch> fetches = new ArrayList<>();
-        List<Element> elements = rootElement.elements();
-        for (Element element : elements){
-            EFetch eFetch = new EFetch();
-            Element medlineCitation = element.element("MedlineCitation");
-            if(medlineCitation!=null){
-                Element article = medlineCitation.element("Article");
-                String pmid = medlineCitation.elementText("PMID");
-                eFetch.setPId(Integer.parseInt(pmid));
-
-
-                if(article.element("Abstract")!=null){
-                    StringBuilder abstractText = new StringBuilder();
-                    List<Element> abstractElement = article.element("Abstract").elements("AbstractText");
-                    for (Element item : abstractElement){
-                        abstractText.append(item.getText()+"\n");
-                    }
-                    eFetch.setArticleAbstract(abstractText.toString());
-                }
-                if(article.element("Journal")!=null){
-                    String journalTitle = article.element("Journal").elementText("Title");
-                    String journalTitleAbbreviation = article.element("Journal").elementText("ISOAbbreviation");
-                    Journal journal = new Journal();
-                    journal.setTitle(journalTitle);
-                    journal.setAbbreviation(journalTitleAbbreviation);
-                    eFetch.setJournal(journal);
-
-                    if (article.element("Journal").element("JournalIssue")!=null){
-                        Element pubDate = article.element("Journal").element("JournalIssue").element("PubDate");
-                        String year = pubDate.elementText("Year");
-                        if(year==null){
-                            // TUDO
-                            year = "2018";
-                        }
-                        String month = pubDate.elementText("Month");
-                        if(month!=null){
-                            month =String.valueOf( MonthConverter.convert(month));
-                        }else {
-                            month = "1";
-                        }
-                        String day = pubDate.elementText("Day");
-                        if(day==null){
-                            day="1";
-                        }
-                        eFetch.setPublishDate(year+"-"+month+"-"+day);
-
-                    }
-                }
-                String articleTitle = article.elementText("ArticleTitle");
-                eFetch.setArticleTitle(articleTitle);
-
-                if(article.element("AuthorList")!=null){
-                    List<Element> authors = article.element("AuthorList").elements("Author");
-                    List<Author> authorList = new ArrayList<>();
-                    for (Element item: authors){
-                        Author author = new Author();
-                        author.setLastName(item.elementText("LastName"));
-                        author.setForeName(item.elementText("ForeName"));
-                        author.setInitials(item.elementText("Initials"));
-                        if(item.element("AffiliationInfo")!=null){
-                            author.setAffiliation(item.element("AffiliationInfo").elementText("Affiliation"));
-                        }
-
-                        authorList.add(author);
-                    }
-                    eFetch.setAuthors(authorList);
-                }
+    public List<EFetch>    spiderEFetch(Set<Integer> ids, Integer retMax)  {
+        try {
+            List<String> stringList = new ArrayList<>();
+            for (Integer num : ids) {
+                stringList.add(num.toString());
             }
 
+            String joinIds = String.join(",", stringList);
+            String apiKey = "8145c95381a416f75f7f3245637414470807";
+            log.info(joinIds);
 
-            Element pubmedData = element.element("PubmedData");
-            if(pubmedData!=null){
-                if(pubmedData.element("ArticleIdList")!=null){
-                    List<Element> articleIds = pubmedData.element("ArticleIdList").elements("ArticleId");
-                    for (Element articleId: articleIds){
-                        String idType = articleId.attributeValue("IdType");
-                        String id = articleId.getText();
-                        if(idType.equals("pmc")){
-                            eFetch.setPmc(id);
-                        } else if (idType.equals("doi")) {
-                            eFetch.setDoi(id);
+            String apiUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&&api_key=" + apiKey+"&retmax="+retMax;
+            log.info(apiUrl);
+            HttpClient httpClient = HttpClients.createDefault();
+            // 创建HttpGet请求对象
+            HttpPost httpPost = new HttpPost(apiUrl);
+            List<NameValuePair> params = new ArrayList<>();
+            params.add(new BasicNameValuePair("id", joinIds));
+            UrlEncodedFormEntity urlEncodedFormEntity = new UrlEncodedFormEntity(params, StandardCharsets.UTF_8);
+            httpPost.setEntity(urlEncodedFormEntity);
+
+            // 发送请求并获取响应
+            HttpResponse response = httpClient.execute(httpPost);
+
+            // 解析响应内容
+            HttpEntity entity = response.getEntity();
+            String responseText = EntityUtils.toString(entity);
+            // 处理响应数据
+//            System.out.println(responseText);
+            Document document = DocumentHelper.parseText(responseText);
+            Element rootElement = document.getRootElement();
+
+            List<EFetch> fetches = new ArrayList<>();
+            List<Element> elements = rootElement.elements();
+            for (Element element : elements){
+                EFetch eFetch = new EFetch();
+                Element medlineCitation = element.element("MedlineCitation");
+                if(medlineCitation!=null){
+                    Element article = medlineCitation.element("Article");
+                    String pmid = medlineCitation.elementText("PMID");
+                    eFetch.setPId(Integer.parseInt(pmid));
+
+
+                    if(article.element("Abstract")!=null){
+                        StringBuilder abstractText = new StringBuilder();
+                        List<Element> abstractElement = article.element("Abstract").elements("AbstractText");
+                        for (Element item : abstractElement){
+                            abstractText.append(item.getText()+"\n");
+                        }
+                        eFetch.setArticleAbstract(abstractText.toString());
+                    }
+                    if(article.element("Journal")!=null){
+                        String journalTitle = article.element("Journal").elementText("Title");
+                        String journalTitleAbbreviation = article.element("Journal").elementText("ISOAbbreviation");
+                        Journal journal = new Journal();
+                        journal.setTitle(journalTitle);
+                        journal.setAbbreviation(journalTitleAbbreviation);
+                        eFetch.setJournal(journal);
+
+                        if (article.element("Journal").element("JournalIssue")!=null){
+                            Element pubDate = article.element("Journal").element("JournalIssue").element("PubDate");
+                            String year = pubDate.elementText("Year");
+                            if(year==null){
+                                // TUDO
+                                year = "2018";
+                            }
+                            String month = pubDate.elementText("Month");
+                            if(month!=null){
+                                month =String.valueOf( MonthConverter.convert(month));
+                            }else {
+                                month = "1";
+                            }
+                            String day = pubDate.elementText("Day");
+                            if(day==null){
+                                day="1";
+                            }
+                            eFetch.setPublishDate(year+"-"+month+"-"+day);
+
                         }
                     }
+                    String articleTitle = article.elementText("ArticleTitle");
+                    eFetch.setArticleTitle(articleTitle);
 
+                    if(article.element("AuthorList")!=null){
+                        List<Element> authors = article.element("AuthorList").elements("Author");
+                        List<Author> authorList = new ArrayList<>();
+                        for (Element item: authors){
+                            Author author = new Author();
+                            author.setLastName(item.elementText("LastName"));
+                            author.setForeName(item.elementText("ForeName"));
+                            author.setInitials(item.elementText("Initials"));
+                            if(item.element("AffiliationInfo")!=null){
+                                author.setAffiliation(item.element("AffiliationInfo").elementText("Affiliation"));
+                            }
+
+                            authorList.add(author);
+                        }
+                        eFetch.setAuthors(authorList);
+                    }
                 }
-                if(pubmedData.element("ReferenceList")!=null){
-                    List<Element> references = pubmedData.element("ReferenceList").elements("Reference");
-                    List<Integer> rsreferencePids = new ArrayList<>();
-                    for (Element item:references){
-                        if(item.element("ArticleIdList")!=null){
-                            List<Element> articleIds = item.element("ArticleIdList").elements("ArticleId");
-                            for (Element articleId: articleIds){
-                                String idType = articleId.attributeValue("IdType");
-                                String id = articleId.getText();
-                                if(idType.equals("pubmed")){
-                                    rsreferencePids.add(Integer.parseInt(id));
-                                    break;
-                                }
+
+
+                Element pubmedData = element.element("PubmedData");
+                if(pubmedData!=null){
+                    if(pubmedData.element("ArticleIdList")!=null){
+                        List<Element> articleIds = pubmedData.element("ArticleIdList").elements("ArticleId");
+                        for (Element articleId: articleIds){
+                            String idType = articleId.attributeValue("IdType");
+                            String id = articleId.getText();
+                            if(idType.equals("pmc")){
+                                eFetch.setPmc(id);
+                            } else if (idType.equals("doi")) {
+                                eFetch.setDoi(id);
                             }
                         }
 
                     }
-                    eFetch.setReferencePids(rsreferencePids);
+                    if(pubmedData.element("ReferenceList")!=null){
+                        List<Element> references = pubmedData.element("ReferenceList").elements("Reference");
+                        List<Integer> rsreferencePids = new ArrayList<>();
+                        for (Element item:references){
+                            if(item.element("ArticleIdList")!=null){
+                                List<Element> articleIds = item.element("ArticleIdList").elements("ArticleId");
+                                for (Element articleId: articleIds){
+                                    String idType = articleId.attributeValue("IdType");
+                                    String id = articleId.getText();
+                                    if(idType.equals("pubmed")){
+                                        rsreferencePids.add(Integer.parseInt(id));
+                                        break;
+                                    }
+                                }
+                            }
+
+                        }
+                        eFetch.setReferencePids(rsreferencePids);
+                    }
                 }
+
+
+
+
+
+
+
+
+                fetches.add(eFetch);
             }
 
 
-
-
-
-
-
-
-            fetches.add(eFetch);
-        }
-
-
-//            DocumentBuilder builder = factory.newDocumentBuilder();
-//            Document document = builder.parse(new InputSource(new StringReader(responseText)));
-//            System.out.println(document);
-////            Document document = DocumentHelper.parseText(xmlString);
-////
-////            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-////            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-////            Document document = dBuilder.parse(new InputSource(new StringReader(responseText)));
-////            Element rootElement = document.getDocumentElement();
-////            NodeList nodeList = rootElement.getElementsByTagName("PubmedArticle");
-//
-//            System.out.println();
-
-
-//            return eSearch;
-
             return fetches;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (DocumentException e) {
+            throw new RuntimeException(e);
+        }
 
     }
 
 
-//        System.out.println(eSearchList);
 
 
-//        List<PubMed> pubMedList = new ArrayList<>();
 
-//        int size = eSearch.getEsearchresult().getIdlist().size();
-//        System.out.println(size);
-//        initDataBase();
-//        log.info("EXECUTING : command line runner");
-//        Taxonomy taxonomy = new Taxonomy();
-//        taxonomy.setName("sssssss");
-//        taxonomyServices.save(taxonomy);
-//        List<Taxonomy> taxonomies = taxonomyServices.listAll();
-//        System.out.println(taxonomies);
-//
-//        for (int i = 0; i < args.length; ++i) {
-//            log.info("args[{}]: {}", i, args[i]);
-//        }
+    @Override
+    public List<EFetch>    spiderPMCEFetch(Set<Integer> ids, Integer retMax)  {
+        try {
+            List<String> stringList = new ArrayList<>();
+            for (Integer num : ids) {
+                stringList.add(num.toString());
+            }
+
+            String joinIds = String.join(",", stringList);
+            String apiKey = "8145c95381a416f75f7f3245637414470807";
+            log.info(joinIds);
+
+            String apiUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pmc&retmode=xml&&api_key=" + apiKey+"&retmax="+retMax;
+            log.info(apiUrl);
+            HttpClient httpClient = HttpClients.createDefault();
+            // 创建HttpGet请求对象
+            HttpPost httpPost = new HttpPost(apiUrl);
+            List<NameValuePair> params = new ArrayList<>();
+            params.add(new BasicNameValuePair("id", joinIds));
+            UrlEncodedFormEntity urlEncodedFormEntity = new UrlEncodedFormEntity(params, StandardCharsets.UTF_8);
+            httpPost.setEntity(urlEncodedFormEntity);
+
+            // 发送请求并获取响应
+            HttpResponse response = httpClient.execute(httpPost);
+
+            // 解析响应内容
+            HttpEntity entity = response.getEntity();
+            String responseText = EntityUtils.toString(entity);
+            // 处理响应数据
+//            System.out.println(responseText);
+            Document document = DocumentHelper.parseText(responseText);
+            Element rootElement = document.getRootElement();
+
+            List<EFetch> fetches = new ArrayList<>();
+            List<Element> elements = rootElement.elements();
+            for (Element element : elements){
+                EFetch eFetch = new EFetch();
+                List<Element> journalMetas = element.element("front").elements();
+                eFetch.setArticleFullText(element.asXML());
+                for (Element journalMeta : journalMetas){
+                    List<Element> articleIds = journalMeta.elements();
+                    if(articleIds!=null){
+                        for (Element articleId: articleIds){
+                            String pubIdType = articleId.attributeValue("pub-id-type");
+                            if(pubIdType!=null &&pubIdType.equals("pmid")){
+                                String text = articleId.getText();
+                                int pid = Integer.parseInt(text);
+                                eFetch.setPId(pid);
+                                break;
+                            }
+
+                        }
+
+                    }
+
+                }
+                fetches.add(eFetch);
+            }
+
+            return fetches;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (DocumentException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    @Async
+    public void runPMC(Integer batchSize)  {
+        List<PubMed> pubMedList = pubMedService.listAllNoPMCEFetch();
+        runPMC(pubMedList,batchSize);
+
+    }
+    @Override
+    public void runPMC(List<PubMed> pubMedList,Integer batchSize)  {
+        this.isPMCAlreadyRun = true;
+        try {
+
+            Map<Integer, PubMed> pubMedMap = ServiceUtil.convertToMap(pubMedList, PubMed::getPId);
+            Set<String> pids = ServiceUtil.fetchProperty(pubMedList, PubMed::getPmc);
+            Set<Integer> pmc = pids.stream().map(item->Integer.parseInt(item.replace("PMC",""))).collect(Collectors.toSet());
+
+            Iterator<Integer> iterator = pmc.iterator();
+
+            // 遍历Set并分批处理
+            while (iterator.hasNext()) {
+                // 创建一个新的批次
+                Set<Integer> batch = new HashSet<>();
+
+                // 在当前批次中添加元素
+                for (int i = 0; i < batchSize && iterator.hasNext(); i++) {
+                    batch.add(iterator.next());
+                }
+                List<EFetch> fetches = spiderPMCEFetch(batch, 10000);
+                System.out.println();
+                for (EFetch eFetch : fetches) {
+                    PubMed pubMed = pubMedMap.get(eFetch.getPId());
+                    pubMed.setIsPMCEFetch(true);
+                    pubMed.setArticleFullText(eFetch.getArticleFullText());
+                    pubMedService.save(pubMed);
+
+                }
+
+                System.out.println(pubMedService.listAllNoEFetch().size());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }finally {
+            this.isPMCAlreadyRun =false;
+        }
+    }
+
+
+
+
 
     public static  List<TaxonomyNodes> tsvToTaxonomyNodes(String filePath) {
         // 创建 CsvParserSettings 对象
@@ -390,7 +499,7 @@ public class NCBIServiceImpl implements INCBIService {
         return  taxonomyNamesList;
     }
 
-    public static  List<TaxonomyNames> tsvToTaxonomyNames( String filePath) {
+    public static  List<Taxonomy> tsvToTaxonomyNames(String filePath) {
         // 创建 CsvParserSettings 对象
         CsvParserSettings settings = new CsvParserSettings();
 
@@ -404,13 +513,13 @@ public class NCBIServiceImpl implements INCBIService {
         parser.beginParsing(new File(filePath));
 
         String[] row;
-        List<TaxonomyNames> taxonomyNamesList = new ArrayList<>();
+        List<Taxonomy> taxonomyNamesList = new ArrayList<>();
         while ((row = parser.parseNext()) != null) {
             // 处理每一行数据
 //            for (String value : row) {
 //                System.out.println(value);
 //            }
-            TaxonomyNames taxonomyNames = new TaxonomyNames();
+            Taxonomy taxonomyNames = new Taxonomy();
             taxonomyNames.setTaxId(Integer.parseInt(row[0]));
             taxonomyNames.setNameTxt(row[1]);
             taxonomyNames.setUniqueName(row[2]);
@@ -432,46 +541,76 @@ public class NCBIServiceImpl implements INCBIService {
 
 
 
+    @Override
+    @Async
+    public void runPubmed(Integer batchSize)  {
+        List<PubMed> pubMedList = pubMedService.listAllNoEFetch();
+        runPubmed(pubMedList,batchSize);
 
-//    public static <DOMAIN> List<DOMAIN> tsvToBean(Class<DOMAIN> clz, String filePath) {
-//        try {
-//            FileInputStream inputStream = new FileInputStream(filePath);
-//            Throwable var3 = null;
-//
-//            List var8;
-//            try {
-//                BeanListProcessor<DOMAIN> beanListProcessor = new BeanListProcessor(clz);
-//                TsvParserSettings settings = new TsvParserSettings();
-//                settings.getFormat().setLineSeparator("|");
-//                settings.setProcessor(beanListProcessor);
-//                settings.setHeaderExtractionEnabled(true);
-//                TsvParser parser = new TsvParser(settings);
-//                parser.parse(inputStream);
-//                List<DOMAIN> beans = beanListProcessor.getBeans();
-//                inputStream.close();
-//                var8 = beans;
-//            } catch (Throwable var18) {
-//                var3 = var18;
-//                throw var18;
-//            } finally {
-//                if (inputStream != null) {
-//                    if (var3 != null) {
-//                        try {
-//                            inputStream.close();
-//                        } catch (Throwable var17) {
-//                            var3.addSuppressed(var17);
-//                        }
-//                    } else {
-//                        inputStream.close();
-//                    }
-//                }
-//
-//            }
-//
-//            return var8;
-//        } catch (IOException var20) {
-//            var20.printStackTrace();
-//            return null;
-//        }
-//    }
+    }
+
+    @Override
+    public void runPubmed(List<PubMed> pubMedList, Integer batchSize)  {
+        this.isAlreadyRun = true;
+        try {
+            Map<Integer, PubMed> pubMedMap = ServiceUtil.convertToMap(pubMedList, PubMed::getPId);
+            Set<Integer> pids = ServiceUtil.fetchProperty(pubMedList, PubMed::getPId);
+            Iterator<Integer> iterator = pids.iterator();
+
+            // 遍历Set并分批处理
+            while (iterator.hasNext()) {
+                // 创建一个新的批次
+                Set<Integer> batch = new HashSet<>();
+
+                // 在当前批次中添加元素
+                for (int i = 0; i < batchSize && iterator.hasNext(); i++) {
+                    batch.add(iterator.next());
+                }
+                List<EFetch> fetches = spiderEFetch(batch, 10000);
+                for (EFetch eFetch : fetches) {
+                    PubMed pubMed = pubMedMap.get(eFetch.getPId());
+                    if(pubMed!=null){
+                        pubMed.setIsEFetch(true);
+                        BeanUtils.copyProperties(eFetch, pubMed, "pId","publishDate");
+                        String publishDate = eFetch.getPublishDate();
+                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                        Date date = sdf.parse(publishDate);
+                        pubMed.setPublishDate(date);
+                        Journal journalInput = eFetch.getJournal();
+                        Journal journal = journalService.findSave(journalInput);
+                        pubMed.setJournalId( journal.getId());
+
+                        List<Integer> referencePids = eFetch.getReferencePids();
+                        if(referencePids!=null){
+                            for (Integer id:referencePids ){
+                                PubMed pubMedRef = pubMedMap.get(id);
+                                if(pubMedRef!=null){
+                                    referenceService.findSave(pubMed.getId(), pubMedRef.getId());
+                                }
+                            }
+
+                        }
+
+                        List<Author> authors = eFetch.getAuthors();
+                        if(authors!=null){
+                            for (Author authorInput: authors){
+                                Author author = authorService.findSave(authorInput);
+                                pubMedAuthorService.findSave(pubMed.getId(),author.getId());
+                            }
+
+                        }
+
+                        pubMedService.save(pubMed);
+                    }
+
+                }
+                System.out.println(pubMedService.listAllNoEFetch().size());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }finally {
+            this.isAlreadyRun =false;
+        }
+    }
+
 }
