@@ -11,9 +11,7 @@ import javax.persistence.Entity;
 public class Disease extends BaseEntity {
     private String name;
     private String enName;
-
     private String abbreviation;
-
     @Column(columnDefinition = "longtext")
     private String description;
 
